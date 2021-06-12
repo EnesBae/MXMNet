@@ -66,12 +66,10 @@ class EMA:
                 assert name in self.shadow
                 param.data = self.original[name]
 
-
-def MLP(channels):
+def MLP(channels):      # channels = []
     return Sequential(*[
         Sequential(Linear(channels[i - 1], channels[i]), SiLU())
         for i in range(1, len(channels))])
-
 
 class Res(nn.Module):
     def __init__(self, dim):
@@ -83,7 +81,6 @@ class Res(nn.Module):
         m1 = self.mlp(m)
         m_out = m1 + m
         return m_out
-
 
 def compute_idx(pos, edge_index):
 
@@ -115,10 +112,8 @@ def compute_idx(pos, edge_index):
 
     return counts_repeat1.long(), counts_repeat2.long(), angle
 
-
 def Jn(r, n):
     return np.sqrt(np.pi / (2 * r)) * sp.jv(n + 0.5, r)
-
 
 def Jn_zeros(n, k):
     zerosj = np.zeros((n, k), dtype='float32')
@@ -134,7 +129,6 @@ def Jn_zeros(n, k):
 
     return zerosj
 
-
 def spherical_bessel_formulas(n):
     x = sym.symbols('x')
 
@@ -145,7 +139,6 @@ def spherical_bessel_formulas(n):
         f += [sym.simplify(b * (-x)**i)]
         a = sym.simplify(b)
     return f
-
 
 def bessel_basis(n, k):
     zeros = Jn_zeros(n, k)
@@ -170,11 +163,9 @@ def bessel_basis(n, k):
         bess_basis += [bess_basis_tmp]
     return bess_basis
 
-
 def sph_harm_prefactor(k, m):
     return ((2 * k + 1) * np.math.factorial(k - abs(m)) /
             (4 * np.pi * np.math.factorial(k + abs(m))))**0.5
-
 
 def associated_legendre_polynomials(k, zero_m_only=True):
     z = sym.symbols('z')
@@ -199,7 +190,6 @@ def associated_legendre_polynomials(k, zero_m_only=True):
                          (i + j - 1) * P_l_m[j - 2][i]) / (j - i))
 
     return P_l_m
-
 
 def real_sph_harm(k, zero_m_only=True, spherical_coordinates=True):
     if not zero_m_only:
@@ -248,7 +238,6 @@ def real_sph_harm(k, zero_m_only=True, spherical_coordinates=True):
 
     return Y_func_l_m
 
-
 class BesselBasisLayer(torch.nn.Module):
     def __init__(self, num_radial, cutoff, envelope_exponent=6):
         super(BesselBasisLayer, self).__init__()
@@ -266,7 +255,6 @@ class BesselBasisLayer(torch.nn.Module):
         dist = dist.unsqueeze(-1) / self.cutoff
         return self.envelope(dist) * (self.freq * dist).sin()
 
-
 class SiLU(nn.Module):
     def __init__(self):
         super().__init__() 
@@ -274,10 +262,8 @@ class SiLU(nn.Module):
     def forward(self, input):
         return silu(input)
 
-
 def silu(input):
     return input * torch.sigmoid(input)
-
 
 class Envelope(torch.nn.Module):
     def __init__(self, exponent):
@@ -295,7 +281,6 @@ class Envelope(torch.nn.Module):
 
         zero = torch.zeros_like(x)
         return torch.where(x < 1, env_val, zero)
-
 
 class SphericalBasisLayer(torch.nn.Module):
     def __init__(self, num_spherical, num_radial, cutoff=5.0,
@@ -335,8 +320,6 @@ class SphericalBasisLayer(torch.nn.Module):
         n, k = self.num_spherical, self.num_radial
         out = (rbf[idx_kj].view(-1, n, k) * cbf.view(-1, n, 1)).view(-1, n * k)
         return out
-
-
 
 msg_special_args = set([
     'edge_index',
@@ -501,8 +484,8 @@ class MessagePassing(torch.nn.Module):
         kwargs = self.__collect__(edge_index, size, kwargs)
 
         msg_kwargs = self.__distribute__(self.__msg_params__, kwargs)
-
         m = self.message(**msg_kwargs)
+
         aggr_kwargs = self.__distribute__(self.__aggr_params__, kwargs)
         m = self.aggregate(m, **aggr_kwargs)
 
