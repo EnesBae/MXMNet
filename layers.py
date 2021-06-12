@@ -37,20 +37,20 @@ class Global_MP(MessagePassing):
         h = self.mlp(h) + res_h
         h = self.res2(h)
         h = self.res3(h)
-        
+
         # Message Passing operation
         h = self.propagate(edge_index, x=h, num_nodes=h.size(0), edge_attr=edge_attr)
 
         return h
 
     def message(self, x_i, x_j, edge_attr, edge_index, num_nodes):
-        num_edge = edge_attr.size()[0]
+        num_edge = edge_attr.size()[0]  # e_ji 갯수 수
 
         x_edge = torch.cat((x_i[:num_edge], x_j[:num_edge], edge_attr), -1)
         x_edge = self.x_edge_mlp(x_edge)
 
         x_j = torch.cat((self.linear(edge_attr) * x_edge, x_j[num_edge:]), dim=0)
-
+                         # m_ji = e_jiㆍW ⊙ MLP 결과       # shape 맞추기
         return x_j
 
     def update(self, aggr_out):
@@ -92,23 +92,23 @@ class Local_MP(torch.nn.Module):
         # Integrate the Cross Layer Mapping inside the Local Message Passing
         h = self.h_mlp(h)
         
-        # Message Passing 1
+        # Message Passing 1                         # mlp_kj 및 mlp_ji_1 은 같은 구조 클래스 [ 3*dim , dim ]
         j, i = edge_index
-        m = torch.cat([h[i], h[j], rbf], dim=-1)
+        m = torch.cat([h[i], h[j], rbf], dim=-1)    # h_k ∥ h_j ∥ rbf (3dim)    [참고] rbf = e_kj
 
         m_kj = self.mlp_kj(m)
         m_kj = m_kj * self.lin_rbf1(rbf)
-        m_kj = m_kj[idx_kj] * self.mlp_sbf1(sbf1)
+        m_kj = m_kj[idx_kj] * self.mlp_sbf1(sbf1)   # [참고] sbf = a_kj,ji
         m_kj = scatter(m_kj, idx_ji_1, dim=0, dim_size=m.size(0), reduce='add')
         
-        m_ji_1 = self.mlp_ji_1(m)
+        m_ji_1 = self.mlp_ji_1(m)                   # h_k ∥ h_j ∥ rbf  그대로 ? h_j h_i 가 아니고 ?
 
-        m = m_ji_1 + m_kj
+        m = m_ji_1 + m_kj                           # MP1 결과 > MP2 입력력
 
-        # Message Passing 2       (index jj denotes j'i in the main paper)
+        # Mssage Passing 2                         (index jj denotes j'i in the main paper)
         m_jj = self.mlp_jj(m)
         m_jj = m_jj * self.lin_rbf2(rbf)
-        m_jj = m_jj[idx_jj] * self.mlp_sbf2(sbf2)
+        m_jj = m_jj[idx_jj] * self.mlp_sbf2(sbf2)   # [참고] sbf = a_ji,j'i(jj)
         m_jj = scatter(m_jj, idx_ji_2, dim=0, dim_size=m.size(0), reduce='add')
         
         m_ji_2 = self.mlp_ji_2(m)
@@ -117,7 +117,7 @@ class Local_MP(torch.nn.Module):
 
         # Aggregation
         m = self.lin_rbf_out(rbf) * m
-        h = scatter(m, i, dim=0, dim_size=h.size(0), reduce='add')
+        h = scatter(m, i, dim=0, dim_size=h.size(0), reduce='add')  # i 원자(노드)에 임베딩 (메세지들 통합)
         
         # Update function f_u
         h = self.res1(h)
@@ -127,6 +127,6 @@ class Local_MP(torch.nn.Module):
 
         # Output Module
         y = self.y_mlp(h)
-        y = self.y_W(y)
+        y = self.y_W(y)         # 회귀 (타겟 1차원)
 
         return h, y
