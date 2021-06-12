@@ -5,6 +5,7 @@ import os.path as osp
 import time
 import argparse
 import numpy as np
+import pandas as pd
 import random
 import torch
 import torch.nn.functional as F
@@ -17,7 +18,9 @@ from model import MXMNet, Config
 from utils import EMA
 from qm9_dataset import QM9
 
+# 호출 당시 인자값을 줘서 동작을 다르게 하고 싶은 경우 (파이썬 내장함수 : argparse 모듈)
 parser = argparse.ArgumentParser()
+
 parser.add_argument('--gpu', type=int, default=0, help='GPU number.')
 parser.add_argument('--seed', type=int, default=920, help='Random seed.')
 parser.add_argument('--epochs', type=int, default=900, help='Number of epochs to train.')
@@ -27,14 +30,14 @@ parser.add_argument('--n_layer', type=int, default=6, help='Number of hidden lay
 parser.add_argument('--dim', type=int, default=128, help='Size of input hidden units.')
 parser.add_argument('--dataset', type=str, default="QM9", help='Dataset')
 parser.add_argument('--batch_size', type=int, default=128, help='Batch size')
-parser.add_argument('--target', type=int, default="7", help='Index of target (0~11) for prediction')
+parser.add_argument('--target', type=int, default="1", help='Index of target (0~11) for prediction')
 parser.add_argument('--cutoff', type=float, default=5.0, help='Distance cutoff used in the global layer')
-
+# 입력받은 인자값을 args에 저장 (11종)     [참고] type : namespace
 args = parser.parse_args()
 
+# 1. GPU 설정
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-if torch.cuda.is_available():
-    torch.cuda.set_device(args.gpu)
+if torch.cuda.is_available(): torch.cuda.set_device(args.gpu)
 
 def set_seed(seed):
     torch.backends.cudnn.deterministic = True
@@ -44,16 +47,19 @@ def set_seed(seed):
     np.random.seed(seed)
     random.seed(seed)
 
+# 2. 타겟 설정 (QM9 데이터셋의 12종 예측)
 target = args.target
-if target in [7, 8, 9, 10]:
-    target = target + 5
+if target in [7, 8, 9, 10]: target = target + 5     # Atomization E 만 사용 (12~15 별도 특성 생성)
+
+# 3. 시드 설정 (6종)
 set_seed(args.seed)
 
 targets = ['mu (D)', 'a (a^3_0)', 'e_HOMO (eV)', 'e_LUMO (eV)', 'delta e (eV)', 'R^2 (a^2_0)', 'ZPVE (eV)', 'U_0 (eV)', 'U (eV)', 'H (eV)', 'G (eV)', 'c_v (cal/mol.K)', ]
 
+# 데이터 MAE 평가 함수
 def test(loader):
     error = 0
-    ema.assign(model)
+    ema.assign(model)   # utils.EMA 함수 참고 : ema = EMA(model, decay=0.999)
 
     for data in loader:
         data = data.to(device)
@@ -62,14 +68,15 @@ def test(loader):
     ema.resume(model)
     return error / len(loader.dataset)
 
+# 타겟 특성 선택 (특성(data.y): 12 → 1)
 class MyTransform(object):
-    def __call__(self, data):
+    def __call__(self, data):           # 함수를 호출하는 것처럼 클래스의 객체도 호출할 수 있게 만드는 매직 메소드 (__로 시작)
         data.y = data.y[:, target]
         return data
 
 #Download and preprocess dataset
-path = osp.join(osp.dirname(osp.realpath(__file__)), '.', 'data', 'QM9')
-dataset = QM9(path, transform=MyTransform()).shuffle()
+path = osp.join(osp.dirname(osp.realpath(__file__)), '.', 'data', 'QM9')    # os.path : 디렉토리 + 파일 이름
+dataset = QM9(path, transform=MyTransform()).shuffle()                     # qm9_dataset 확인
 print('# of graphs:', len(dataset))
 
 # Split dataset
@@ -94,12 +101,13 @@ optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.wd, ams
 scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9961697)
 scheduler_warmup = GradualWarmupScheduler(optimizer, multiplier=1.0, total_epoch=1, after_scheduler=scheduler)
 
-ema = EMA(model, decay=0.999)
+ema = EMA(model, decay=0.999)   # utils.EMA 참고
 
 print('===================================================================================')
 print('                                Start training:')
 print('===================================================================================')
 
+start=time.time()
 best_epoch = None
 best_val_loss = None
 
@@ -119,8 +127,8 @@ for epoch in range(args.epochs):
         loss.backward()
         clip_grad_norm_(model.parameters(), max_norm=1000, norm_type=2)
         optimizer.step()
-        
-        curr_epoch = epoch + float(step) / (len(train_dataset) / args.batch_size)
+
+        curr_epoch = epoch + float(step) / (len(train_dataset) / args.batch_size)   # ( 에폭 + 스텝 ) / for 횟수
         scheduler_warmup.step(curr_epoch)
 
         ema(model)
@@ -136,8 +144,11 @@ for epoch in range(args.epochs):
         best_val_loss = val_loss
 
     print('Epoch: {:03d}, Train MAE: {:.7f}, Validation MAE: {:.7f}, '
-          'Test MAE: {:.7f}'.format(epoch+1, train_loss, val_loss, test_loss))
+          'Test MAE: {:.7f}, time: {}'.format(epoch+1, train_loss, val_loss, test_loss, time.time()-start))
 
 print('===================================================================================')
 print('Best Epoch:', best_epoch)
 print('Best Test MAE:', test_loss)
+
+
+torch.save(model, './MXMNet_polarizabilty_')
