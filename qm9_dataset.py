@@ -171,14 +171,12 @@ class QM9(InMemoryDataset):
         with open(self.raw_paths[2], 'r') as f:
             skip = [int(x.split()[0]) - 1 for x in f.read().split('\n')[9:-2]]
 
-        suppl = Chem.SDMolSupplier(self.raw_paths[0], removeHs=False,
-                                   sanitize=False)
+        suppl = Chem.SDMolSupplier(self.raw_paths[0], removeHs=False, sanitize=False)
 
         data_list = []
         max_dist = 0
         for i, mol in enumerate(tqdm(suppl)):
-            if i in skip:
-                continue
+            if i in skip: continue
 
             N = mol.GetNumAtoms()
 
@@ -186,7 +184,7 @@ class QM9(InMemoryDataset):
             pos = [[float(x) for x in line.split()[:3]] for line in pos]
             pos = torch.tensor(pos, dtype=torch.float)
 
-            type_idx = []
+            type_idx = []       # types = {'H': 0, 'C': 1, 'N': 2, 'O': 3, 'F': 4}
             atomic_number = []
             aromatic = []
             sp = []
@@ -209,14 +207,13 @@ class QM9(InMemoryDataset):
                 start, end = bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()
                 row += [start, end]
                 col += [end, start]
-                edge_type += 2 * [self.bonds[bond.GetBondType()]]
+                edge_type += 2 * [self.bonds[bond.GetBondType()]]   # bonds = {BT.SINGLE: 0, BT.DOUBLE: 1, BT.TRIPLE: 2, BT.AROMATIC: 3}
 
-            edge_index = torch.tensor([row, col], dtype=torch.long)
-            edge_type = torch.tensor(edge_type, dtype=torch.long)
-            edge_attr = F.one_hot(edge_type,
-                                  num_classes=len(self.bonds)).to(torch.float)
+            edge_index = torch.tensor([row, col], dtype=torch.long)   # [2, num_edges] > [ [num~], [num~] ]
+            edge_type = torch.tensor(edge_type, dtype=torch.long)     # [num_edges]
+            edge_attr = F.one_hot(edge_type, num_classes=len(self.bonds)).to(torch.float)   # [ num, 4 ] 원-핫 인코딩
 
-            perm = (edge_index[0] * N + edge_index[1]).argsort()
+            perm = (edge_index[0] * N + edge_index[1]).argsort()    # 그냥 섞는 용도? [엣지1] ⊙ 원자수 + [엣지2]
             edge_index = edge_index[:, perm]
             edge_type = edge_type[perm]
             edge_attr = edge_attr[perm]
@@ -225,7 +222,7 @@ class QM9(InMemoryDataset):
             hs = (z == 1).to(torch.float)
             num_hs = scatter(hs[row], col, dim_size=N).tolist()
 
-            x = torch.tensor(type_idx).to(torch.float)
+            x = torch.tensor(type_idx).to(torch.float)  # 원자 인덱싱 벡터
 
             y = target[i].unsqueeze(0)
             name = mol.GetProp('_Name')
