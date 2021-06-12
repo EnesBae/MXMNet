@@ -19,11 +19,11 @@ class MXMNet(nn.Module):
     def __init__(self, config: Config, num_spherical=7, num_radial=6, envelope_exponent=5):
         super(MXMNet, self).__init__()
 
-        self.dim = config.dim
-        self.n_layer = config.n_layer
-        self.cutoff = config.cutoff
+        self.dim = config.dim           # 128
+        self.n_layer = config.n_layer   # 6
+        self.cutoff = config.cutoff     # 5
 
-        self.embeddings = nn.Parameter(torch.ones((5, self.dim)))
+        self.embeddings = nn.Parameter(torch.ones((5, self.dim)))   # (5,128) : (원자 인덱싱, 원자 특성)
 
         self.rbf_l = BesselBasisLayer(16, 5, envelope_exponent)
         self.rbf_g = BesselBasisLayer(16, self.cutoff, envelope_exponent)
@@ -46,33 +46,31 @@ class MXMNet(nn.Module):
         self.init()
 
     def init(self):
-        stdv = math.sqrt(3)
+        stdv = math.sqrt(3) # 1.73~
         self.embeddings.data.uniform_(-stdv, stdv)
 
     def indices(self, edge_index, num_nodes):
         row, col = edge_index
 
-        value = torch.arange(row.size(0), device=row.device)
-        adj_t = SparseTensor(row=col, col=row, value=value,
-                             sparse_sizes=(num_nodes, num_nodes))
+        value = torch.arange(row.size(0), device=row.device)    # 엣지 인덱스
+        adj_t = SparseTensor(row=col, col=row, value=value, sparse_sizes=(num_nodes, num_nodes))    # 희소행렬 + 전치
         
         #Compute the node indices for two-hop angles
-        adj_t_row = adj_t[row]
-        num_triplets = adj_t_row.set_value(None).sum(dim=1).to(torch.long)
+        adj_t_row = adj_t[row]                                              #
+        num_triplets = adj_t_row.set_value(None).sum(dim=1).to(torch.long)  # row 반복 갯수 ?
 
         idx_i = col.repeat_interleave(num_triplets)
         idx_j = row.repeat_interleave(num_triplets)
         idx_k = adj_t_row.storage.col()
         mask = idx_i != idx_k
-        idx_i_1, idx_j, idx_k = idx_i[mask], idx_j[mask], idx_k[mask]
+        idx_i_1, idx_j, idx_k = idx_i[mask], idx_j[mask], idx_k[mask]       # 2-hop 이 자신(i)이 아닌 것만(k)
 
         idx_kj = adj_t_row.storage.value()[mask]
         idx_ji_1 = adj_t_row.storage.row()[mask]
 
         #Compute the node indices for one-hop angles
-        adj_t_col = adj_t[col]
-
-        num_pairs = adj_t_col.set_value(None).sum(dim=1).to(torch.long)
+        adj_t_col = adj_t[col]                                              #
+        num_pairs = adj_t_col.set_value(None).sum(dim=1).to(torch.long)     #
         idx_i_2 = row.repeat_interleave(num_pairs)
         idx_j1 = col.repeat_interleave(num_pairs)
         idx_j2 = adj_t_col.storage.col()
@@ -80,16 +78,16 @@ class MXMNet(nn.Module):
         idx_ji_2 = adj_t_col.storage.row()
         idx_jj = adj_t_col.storage.value()
 
-        return idx_i_1, idx_j, idx_k, idx_kj, idx_ji_1, idx_i_2, idx_j1, idx_j2, idx_jj, idx_ji_2
+        return idx_i_1, idx_j, idx_k, idx_kj, idx_ji_1,             idx_i_2, idx_j1, idx_j2, idx_jj, idx_ji_2
 
 
     def forward(self, data):
-        x = data.x
+        x = data.x  # 원자 인덱싱
         edge_index = data.edge_index
         pos = data.pos
         batch = data.batch
         # Initialize node embeddings
-        h = torch.index_select(self.embeddings, 0, x.long())
+        h = torch.index_select(self.embeddings, 0, x.long())    # input, dim, index (int or long)
 
         # Get the edges and pairwise distances in the local layer
         edge_index_l, _ = remove_self_loops(edge_index)
@@ -97,23 +95,23 @@ class MXMNet(nn.Module):
         dist_l = (pos[i_l] - pos[j_l]).pow(2).sum(dim=-1).sqrt()
         
         # Get the edges pairwise distances in the global layer
-        row, col = radius(pos, pos, self.cutoff, batch, batch, max_num_neighbors=500)
+        row, col = radius(pos, pos, self.cutoff, batch, batch, max_num_neighbors=500)   # radius
         edge_index_g = torch.stack([row, col], dim=0)
         edge_index_g, _ = remove_self_loops(edge_index_g)
         j_g, i_g = edge_index_g
         dist_g = (pos[i_g] - pos[j_g]).pow(2).sum(dim=-1).sqrt()
         
         # Compute the node indices for defining the angles
-        idx_i_1, idx_j, idx_k, idx_kj, idx_ji, idx_i_2, idx_j1, idx_j2, idx_jj, idx_ji_2 = self.indices(edge_index_l, num_nodes=h.size(0))
+        idx_i_1, idx_j, idx_k, idx_kj, idx_ji,   idx_i_2, idx_j1, idx_j2, idx_jj, idx_ji_2 = self.indices(edge_index_l, num_nodes=h.size(0))
 
         # Compute the two-hop angles
-        pos_ji_1, pos_kj = pos[idx_j] - pos[idx_i_1], pos[idx_k] - pos[idx_j]
-        a = (pos_ji_1 * pos_kj).sum(dim=-1)
-        b = torch.cross(pos_ji_1, pos_kj).norm(dim=-1)
-        angle_1 = torch.atan2(b, a)
+        pos_ji_1, pos_kj = pos[idx_j] - pos[idx_i_1], pos[idx_k] - pos[idx_j]       # ij, jk (kj, ji)
+        a = (pos_ji_1 * pos_kj).sum(dim=-1)                 # 내적 u v cos
+        b = torch.cross(pos_ji_1, pos_kj).norm(dim=-1)      # 외적 u v sin
+        angle_1 = torch.atan2(b, a)                         # 각도 = arctan( sin / cos )
 
         # Compute the one-hop angles
-        pos_ji_2, pos_jj = pos[idx_j1] - pos[idx_i_2], pos[idx_j2] - pos[idx_j1]
+        pos_ji_2, pos_jj = pos[idx_j1] - pos[idx_i_2], pos[idx_j2] - pos[idx_j1]    # ij, jj (jj, ji)
         a = (pos_ji_2 * pos_jj).sum(dim=-1)
         b = torch.cross(pos_ji_2, pos_jj).norm(dim=-1)
         angle_2 = torch.atan2(b, a)
@@ -121,8 +119,8 @@ class MXMNet(nn.Module):
         # Get the RBF and SBF embeddings
         rbf_g = self.rbf_g(dist_g)
         rbf_l = self.rbf_l(dist_l)
-        sbf_1 = self.sbf(dist_l, angle_1, idx_kj)
-        sbf_2 = self.sbf(dist_l, angle_2, idx_jj)
+        sbf_1 = self.sbf(dist_l, angle_1, idx_kj)   # 2-hop
+        sbf_2 = self.sbf(dist_l, angle_2, idx_jj)   # 1-hop
         
         rbf_g = self.rbf_g_mlp(rbf_g)
         rbf_l = self.rbf_l_mlp(rbf_l)
@@ -138,5 +136,5 @@ class MXMNet(nn.Module):
             node_sum += t
         
         # Readout
-        output = global_add_pool(node_sum, batch)
+        output = global_add_pool(node_sum, batch)   #
         return output.view(-1)
