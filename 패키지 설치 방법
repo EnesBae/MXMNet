@@ -1,3 +1,29 @@
+# 가상환경 생성
+conda create (-c rdkit -n my-rdkit-env rdkit)
+
+conda create -c rdkit -n my-rdkit-env rdkit)
+conda activate 이름
+
+# 라이브러리 설치
+pip install 
+conda install -c conda-forge rdkit
+
+xlrd
+openpyxl
+
+pandas (numpy)
+seaborn (matplotlib)
+sklearn
+tensorflow
+keras
+
+xgboost (numpy, scipy)
+lightgbm
+
+cv2
+rdkit
+torch_geometric
+
 torch ver 1.7.1 설치 (https://pytorch.org/get-started/previous-versions/)
     1) conda install pytorch==1.7.1 torchvision==0.8.2 torchaudio==0.7.2 cudatoolkit=11.0 -c pytorch
     
