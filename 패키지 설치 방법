@@ -31,21 +31,18 @@ xgboost (numpy, scipy)
 lightgbm
 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-cv2
-rdkit
-torch_geometric
-
-torch ver 1.7.1 설치 (https://pytorch.org/get-started/previous-versions/)
-    1) conda install pytorch==1.7.1 torchvision==0.8.2 torchaudio==0.7.2 cudatoolkit=11.0 -c pytorch
+torch ver 1.8.1 설치 (https://pytorch.org/get-started/previous-versions/)
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+1) conda install pytorch==1.8.1 torchvision==0.9.1 torchaudio==0.8.1 -f https://download.pytorch.org/whl/torch_stable.html
     
 pytorch geometric 맞는 버전 설치. torch1.7, cuda 11.0, --trusted-host=pytorch
-    1) pip install torch-scatter -f https://pytorch-geometric.com/whl/torch-1.7.0+cu110.html --trusted-host=pytorch-geometric.com
-    2) pip install torch-sparse -f https://pytorch-geometric.com/whl/torch-1.7.0+cu110.html --trusted-host=pytorch-geometric.com
-    3) pip install torch-cluster -f https://pytorch-geometric.com/whl/torch-1.7.0+cu110.html --trusted-host=pytorch-geometric.com
-    4) pip install torch-spline-conv -f https://pytorch-geometric.com/whl/torch-1.7.0+cu110.html --trusted-host=pytorch-geometric.com
+    1) pip install torch-scatter -f https://pytorch-geometric.com/whl/torch-1.8.1+cu111.html --trusted-host=pytorch-geometric.com
+    2) pip install torch-sparse -f https://pytorch-geometric.com/whl/torch-1.8.1+cu111.html --trusted-host=pytorch-geometric.com
+    3) pip install torch-cluster -f https://pytorch-geometric.com/whl/torch-1.8.1+cu111.html --trusted-host=pytorch-geometric.com
+    4) pip install torch-spline-conv -f https://pytorch-geometric.com/whl/torch-1.8.1+cu111.html --trusted-host=pytorch-geometric.com
     5) pip install torch-geometric
-    
+ 
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 git 설치
 Mxmnet req.txt 아래와 같이 수정
 
@@ -61,5 +58,7 @@ https://pytorch-geometric.com/whl/torch-1.4.0/torch_sparse-0.6.0%2Bcu101-cp36-cp
 https://pytorch-geometric.com/whl/torch-1.4.0/torch_cluster-1.5.4%2Bcu101-cp36-cp36m-linux_x86_64.whl
 torch-geometric==1.4.2
 git+https://github.com/ildoonet/pytorch-gradual-warmup-lr.git
-
 git config --global http.sslVerify false  (마지막 명령이 잘 될거에요)
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
