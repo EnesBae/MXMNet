@@ -24,7 +24,7 @@ openpyxl
 pandas (numpy)
 seaborn (matplotlib)
 sklearn
-tensorflow
+tensorflow-gpu  [참고] 파이참에서 설치 가능
 keras
 
 xgboost (numpy, scipy)
